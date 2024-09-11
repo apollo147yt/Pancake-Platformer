@@ -1,0 +1,207 @@
+import pygame
+import sys
+import random
+
+# Initialize Pygame
+pygame.init()
+
+# Constants
+SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
+FPS = 60
+GRAVITY = 1
+PLAYER_SPEED = 5
+JUMP_STRENGTH = -15
+BULLET_SPEED = 7
+SCROLL_THRESHOLD = 300
+ENEMY_SPEED = 2
+
+# Colors
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+BLUE = (0, 0, 255)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+
+# Screen Setup
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Platformer with Shooting and Enemies")
+
+# Player Class
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((40, 60))
+        self.image.fill(BLUE)
+        self.rect = self.image.get_rect()
+        self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT - 100)
+        self.velocity_y = 0
+        self.jumping = False
+        self.scroll_offset_x = 0
+
+    def update(self, keys, platforms):
+        self.move(keys)
+        self.apply_gravity()
+        self.check_collision(platforms)
+
+    def move(self, keys):
+        if keys[pygame.K_LEFT]:
+            self.rect.x -= PLAYER_SPEED
+        if keys[pygame.K_RIGHT]:
+            self.rect.x += PLAYER_SPEED
+
+        if not self.jumping and keys[pygame.K_UP]:
+            self.jumping = True
+            self.velocity_y = JUMP_STRENGTH
+
+        if self.rect.right > SCREEN_WIDTH - SCROLL_THRESHOLD:
+            self.scroll_offset_x -= PLAYER_SPEED
+            self.rect.right = SCREEN_WIDTH - SCROLL_THRESHOLD
+        if self.rect.left < SCROLL_THRESHOLD:
+            self.scroll_offset_x += PLAYER_SPEED
+            self.rect.left = SCROLL_THRESHOLD
+
+    def apply_gravity(self):
+        self.velocity_y += GRAVITY
+        self.rect.y += self.velocity_y
+
+    def check_collision(self, platforms):
+        hits = pygame.sprite.spritecollide(self, platforms, False)
+
+        if hits:
+            for platform in hits:
+                if self.velocity_y > 0 and self.rect.bottom <= platform.rect.top + 10:
+                    self.rect.bottom = platform.rect.top
+                    self.velocity_y = 0
+                    self.jumping = False
+        else:
+            self.jumping = True
+
+# Platform Class
+class Platform(pygame.sprite.Sprite):
+    def __init__(self, x, y, width, height):
+        super().__init__()
+        self.image = pygame.Surface((width, height))
+        self.image.fill(BLACK)
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+
+# Bullet Class
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, x, y, direction):
+        super().__init__()
+        self.image = pygame.Surface((10, 5))
+        self.image.fill(RED)
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+        self.direction = direction
+
+    def update(self):
+        self.rect.x += BULLET_SPEED * self.direction
+        if self.rect.right < 0 or self.rect.left > SCREEN_WIDTH:
+            self.kill()
+
+# Enemy Class
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.Surface((40, 60))
+        self.image.fill(GREEN)
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+        self.direction = random.choice([-1, 1])  # Enemies move left or right
+
+    def update(self):
+        self.rect.x += ENEMY_SPEED * self.direction
+        if self.rect.right > SCREEN_WIDTH or self.rect.left < 0:
+            self.direction *= -1  # Change direction when hitting the edge of the screen
+
+# Function to restart the game
+def restart_game():
+    global player, all_sprites, platforms, bullets, enemies
+
+    player = Player()
+    all_sprites.empty()
+    platforms.empty()
+    bullets.empty()
+    enemies.empty()
+    all_sprites.add(player)
+    platforms.add(ground, platform1, platform2, platform3)
+    all_sprites.add(ground, platform1, platform2, platform3)
+    # Add enemies
+    for _ in range(5):  # Adjust the number of enemies as needed
+        enemy = Enemy(random.randint(0, SCREEN_WIDTH - 40), random.randint(0, SCREEN_HEIGHT - 60))
+        all_sprites.add(enemy)
+        enemies.add(enemy)
+
+# Game Setup
+clock = pygame.time.Clock()
+
+# Create Sprite Groups
+all_sprites = pygame.sprite.Group()
+platforms = pygame.sprite.Group()
+bullets = pygame.sprite.Group()
+enemies = pygame.sprite.Group()
+
+# Create initial Player and Platforms
+player = Player()
+ground = Platform(0, SCREEN_HEIGHT - 40, SCREEN_WIDTH * 2, 40)
+platform1 = Platform(150, 450, 200, 20)
+platform2 = Platform(400, 300, 200, 20)
+platform3 = Platform(800, 200, 150, 20)
+
+# Add sprites to their respective groups
+all_sprites.add(player)
+platforms.add(ground, platform1, platform2, platform3)
+all_sprites.add(ground, platform1, platform2, platform3)
+
+# Add initial enemies
+for _ in range(5):  # Adjust the number of enemies as needed
+    enemy = Enemy(random.randint(0, SCREEN_WIDTH - 40), random.randint(0, SCREEN_HEIGHT - 60))
+    all_sprites.add(enemy)
+    enemies.add(enemy)
+
+# Game Loop
+running = True
+while running:
+    clock.tick(FPS)
+
+    # Event Handling
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_c:  # Fire bullet with 'C' key
+                direction = 1 if pygame.key.get_pressed()[pygame.K_RIGHT] else -1
+                bullet = Bullet(player.rect.centerx, player.rect.centery, direction)
+                all_sprites.add(bullet)
+                bullets.add(bullet)
+            if event.key == pygame.K_r:  # Restart game with 'R' key
+                restart_game()
+
+    # Update
+    keys = pygame.key.get_pressed()
+    player.update(keys, platforms)
+    bullets.update()
+    enemies.update()
+
+    # Draw everything with offset based on player's scroll
+    screen.fill(WHITE)
+    
+    for sprite in platforms:
+        screen.blit(sprite.image, (sprite.rect.x + player.scroll_offset_x, sprite.rect.y))
+
+    for sprite in bullets:
+        screen.blit(sprite.image, (sprite.rect.x + player.scroll_offset_x, sprite.rect.y))
+
+    for sprite in enemies:
+        screen.blit(sprite.image, (sprite.rect.x + player.scroll_offset_x, sprite.rect.y))
+
+    screen.blit(player.image, player.rect.topleft)
+
+    pygame.display.flip()
+
+pygame.quit()
+sys.exit()
